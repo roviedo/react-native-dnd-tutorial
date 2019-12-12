@@ -12,18 +12,18 @@ function getRandomColor() {
 }
 
 const items = [
-  {index: 1, vehicle: 'car', 'color': getRandomColor()},
-  {index: 2, vehicle: 'truck', 'color': getRandomColor()},
-  {index: 3, vehicle: 'bike', 'color': getRandomColor()},
-  {index: 4, vehicle: 'horse', 'color': getRandomColor()}, 
-  {index: 5, vehicle: 'tricycle', 'color': getRandomColor()},
-  {index: 6, vehicle: 'unicycle', 'color': getRandomColor()}, 
-  {index: 7, vehicle: 'motorcyle', 'color': getRandomColor()}, 
-  {index: 8, vehicle: 'suv', 'color': getRandomColor()}, 
-  {index: 9, vehicle: 'pickup truck', 'color': getRandomColor()},
-  {index: 10, vehicle: 'sports car', 'color': getRandomColor()},
-  {index: 11, vehicle: 'slingshot', 'color': getRandomColor()},
-  {index: 12, vehicle: 'station wagon', 'color': getRandomColor()}
+  {index: 0, vehicle: 'car', 'color': getRandomColor()},
+  {index: 1, vehicle: 'truck', 'color': getRandomColor()},
+  {index: 2, vehicle: 'bike', 'color': getRandomColor()},
+  {index: 3, vehicle: 'horse', 'color': getRandomColor()}, 
+  {index: 4, vehicle: 'tricycle', 'color': getRandomColor()},
+  {index: 5, vehicle: 'unicycle', 'color': getRandomColor()}, 
+  {index: 6, vehicle: 'motorcyle', 'color': getRandomColor()}, 
+  {index: 7, vehicle: 'suv', 'color': getRandomColor()}, 
+  {index: 8, vehicle: 'pickup truck', 'color': getRandomColor()},
+  {index: 9, vehicle: 'sports car', 'color': getRandomColor()},
+  {index: 10, vehicle: 'slingshot', 'color': getRandomColor()},
+  {index: 11, vehicle: 'station wagon', 'color': getRandomColor()}
 ];
 
 //li:nth-child(odd) { background: #eee; }
@@ -31,9 +31,16 @@ export default class App extends React.Component {
   constructor(props) {
     super(props);
     this.state = {
-      dragging: false
+      dragging: false,
+      draggingIdx: -1
     };
     this.point = new Animated.ValueXY()
+    this.scrollOffset = 0;
+    this.flatlistTopOffset = 0;
+    this.rowHeight = 0;
+    this.currentIdx = -1;
+    this.currentY = 0;
+    this.active = false;
     this._panResponder = PanResponder.create({
       // Ask to be the responder:
       onStartShouldSetPanResponder: (evt, gestureState) => true,
@@ -46,13 +53,20 @@ export default class App extends React.Component {
         // what is happening!
         // gestureState.d{x,y} will be set to zero now
         console.log(gestureState.y0);
-        this.setState({ dragging: true });
+        this.currentIdx = this.yToIndex(gestureState.y0); // Math.floor((this.scrollOffset + gestureState.y0 - this.flatlistTopOffset) / this.rowHeight);
+        this.currentY = gestureState.y0;
+        this.active = true;
+        Animated.event([{y: this.point.y}])({y: gestureState.y0 - this.rowHeight / 2 });
+        this.setState({ dragging: true, draggingIdx: this.currentIdx }, () => {
+          this.animateList();
+        });
       },
       onPanResponderMove: (evt, gestureState) => {
         // The most recent move distance is gestureState.move{X,Y}
         // The accumulated gesture distance since becoming responder is
         // gestureState.d{x,y}
         console.log(gestureState);
+        this.currentY = gestureState.moveY;
         Animated.event([{y: this.point.y}])({y: gestureState.moveY});
       },
       onPanResponderTerminationRequest: (evt, gestureState) => false,
@@ -74,17 +88,55 @@ export default class App extends React.Component {
     });
   }
 
+  animateList = () => {
+    if (!this.active) {
+      return;
+    }
+
+    requestAnimationFrame(() => {
+      this.animateList();
+    })
+  }
+
+  yToIndex = (y) => {
+    const value = Math.floor((this.scrollOffset + y - this.flatlistTopOffset) / this.rowHeight)
+    if (value < 0) {
+      return 0;
+    }
+
+    if (value > items.length - 1) {
+      return items.length - 1;
+    }
+
+    console.log('value', value);
+    return value;
+  }
+
   reset = () => {
+    this.active = false;
     this.setState({
-      dragging: false
+      dragging: false,
+      draggingIdx: -1
     });
   }
 
-  renderItem = ({ item }) => {
+  renderItem = ({ item }, noPanResponder = false) => {
+    const { draggingIdx } = this.state;
     const color = item.index%2 === 0 ? '#000' : '#eee';
+
     return(
-      <View style={{ padding: 16, backgroundColor: item.color, flexDirection: 'row' }}>
-        <View {...this._panResponder.panHandlers}>
+      <View
+        onLayout={e => {
+          this.rowHeight = e.nativeEvent.layout.height;
+        }}
+        style={{
+          padding: 16,
+          backgroundColor: item.color,
+          flexDirection: 'row',
+          opacity: draggingIdx === item.index ? 0 : 1
+        }}
+      >
+        <View {...(noPanResponder ? {} : this._panResponder.panHandlers)}>
           <Text style={{ fontSize: 28, color: color }}>@</Text>
         </View>
         <Text style={{ textAlign: 'center', flex: 1, fontSize: 22, color: color }}>{item.vehicle}</Text>
@@ -93,17 +145,18 @@ export default class App extends React.Component {
   }
 
   render () {
-    const { dragging } = this.state;
+    const { dragging, draggingIdx } = this.state;
     return (
       <View style={styles.container}>
         { dragging && <Animated.View 
           style={{
-            backgroundColor: 'black',
+            position: 'absolute',
+            backgroundColor: items[draggingIdx].color,
             zIndex: 2,
             width: '100%',
             top: this.point.getLayout().top 
           }}>
-          {this.renderItem({item: {index: 3, vehicle: 'bike'}})}
+          {this.renderItem({item: items[draggingIdx]}, true)}
         </Animated.View> }
         <FlatList
           scrollEnabled={!dragging}
@@ -111,6 +164,13 @@ export default class App extends React.Component {
           data={items}
           renderItem={this.renderItem}
           keyExtractor={item => "" + item.index}
+          onScroll={e => {
+            this.scrollOffset = e.nativeEvent.contentOffset.y
+          }}
+          onLayout={e => {
+            this.flatlistTopOffset = (e.nativeEvent && e.nativeEvent.contentOffset) ? e.nativeEvent.contentOffset.y : 0;
+          }}
+          scrollEventThrottle={16}
         />
       </View>
 
