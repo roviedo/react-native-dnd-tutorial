@@ -11,6 +11,27 @@ function getRandomColor() {
   return color;
 }
 
+function immutableMove(arr, from, to) {
+  return arr.reduce((prev, current, idx, self) => {
+    if (from === to) {
+      prev.push(current);
+    }
+    if (idx === from) {
+      return prev;
+    }
+    if (from < to) {
+      prev.push(current);
+    }
+    if (idx === to) {
+      prev.push(self[from]);
+    }
+    if (from > to) {
+      prev.push(current);
+    }
+    return prev;
+  }, []);
+}
+
 const items = [
   {index: 0, vehicle: 'car', 'color': getRandomColor()},
   {index: 1, vehicle: 'truck', 'color': getRandomColor()},
@@ -32,7 +53,8 @@ export default class App extends React.Component {
     super(props);
     this.state = {
       dragging: false,
-      draggingIdx: -1
+      draggingIdx: -1,
+      items
     };
     this.point = new Animated.ValueXY()
     this.scrollOffset = 0;
@@ -94,8 +116,16 @@ export default class App extends React.Component {
     }
 
     requestAnimationFrame(() => {
+      const newIdx = this.yToIndex(this.currentY);
+      if (this.currentIdx !== newIdx) {
+        this.setState({
+          items: immutableMove(this.state.items, this.currentIdx, newIdx),
+          draggingIdx: newIdx
+        });
+        this.currentIdx = newIdx;
+      }
       this.animateList();
-    })
+    });
   }
 
   yToIndex = (y) => {
@@ -104,8 +134,8 @@ export default class App extends React.Component {
       return 0;
     }
 
-    if (value > items.length - 1) {
-      return items.length - 1;
+    if (value > this.state.items.length - 1) {
+      return this.state.items.length - 1;
     }
 
     console.log('value', value);
@@ -151,17 +181,17 @@ export default class App extends React.Component {
         { dragging && <Animated.View 
           style={{
             position: 'absolute',
-            backgroundColor: items[draggingIdx].color,
+            backgroundColor: this.state.items[draggingIdx].color,
             zIndex: 2,
             width: '100%',
             top: this.point.getLayout().top 
           }}>
-          {this.renderItem({item: items[draggingIdx]}, true)}
+          {this.renderItem({item: this.state.items[draggingIdx]}, true)}
         </Animated.View> }
         <FlatList
           scrollEnabled={!dragging}
           style={{width: '100%'}}
-          data={items}
+          data={this.state.items}
           renderItem={this.renderItem}
           keyExtractor={item => "" + item.index}
           onScroll={e => {
